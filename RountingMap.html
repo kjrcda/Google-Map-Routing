@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+    <title>Flower Run</title>
+    <style>
+      html, body, #map-canvas {
+        height: 95%;
+        margin: 20px;
+        padding: 0px
+      }
+    </style>
+
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;sensor=true"></script>
+    <script type="text/javascript">
+		function searchKeyPress(e)
+		{
+			var key=e.keyCode || e.which;
+			if (key === 13)
+			{
+			    placeMarker();
+			}
+		}
+		
+		Array.prototype.swap = function(old_index, new_index) 
+		{
+		    this[old_index] = this.splice(new_index, 1, this[old_index])[0];
+		    return this;
+		}
+		
+		var EARTH_CONST = 6373;
+    	var map;
+    	var geocoder;
+    	var homeMark;
+    	var homeLatLng;
+    	var searchBounds;
+    	var address;
+    	var dirService;
+    	var dirShow;
+    	var stops = [];
+    	var infos = [];
+    	
+		function initialize() 
+		{
+			geocoder = new google.maps.Geocoder();
+			dirService = new google.maps.DirectionsService();
+			searchBounds = new google.maps.LatLngBounds(new google.maps.LatLng(49.74, -97.355),new google.maps.LatLng(50.01, -96.93));
+			homeLatLng = new google.maps.LatLng(49.8651559, -97.11077669999997);
+			
+			var mapOptions = {
+				center: homeLatLng,
+				zoom: 14
+			};
+			var renderOptions = {
+				suppressBicyclingLayer: true,
+				suppressInfoWindows: true,
+				suppressMarkers: true
+			};
+			 
+			map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+			dirShow = new google.maps.DirectionsRenderer(renderOptions);
+			
+			createHome();
+		}
+		google.maps.event.addDomListener(window, 'load', initialize);
+		
+		function createHome() {
+			if(stops.length!=0)
+			{
+				alert("Stops array not empty!\n" + stops.length +" stops in array");
+			}
+			
+			homeMark = new google.maps.Marker({
+				position: homeLatLng,
+				map: map,
+				title: "Top Hat Florists"
+			});
+			
+			stops.push(homeMark);
+			infoMarker(homeMark);
+			backToHome();
+			
+			google.maps.event.addListener(homeMark,'click', function() {
+				infoMarker(homeMark);
+			});
+		}
+		
+		function backToHome() {
+			map.panTo(homeMark.getPosition());
+			map.setZoom(14);
+		}
+		
+		function infoMarker(mark) {
+			var i=0;
+			if(stops.length> infos.length)
+			{
+				infos.push(new google.maps.InfoWindow({
+		    		content: mark.getTitle()
+		    	}));
+				infos[infos.length -1].open(map,mark);
+			}
+			else if(stops.length = infos.length)
+			{
+				for(i=0; i<stops.length; i++)
+				{
+					if(stops[i] == mark)
+						break;
+				}
+				infos[i].open(map,mark);
+			}
+			else
+				alert("More info windows than stops");
+		}
+		
+		function removeMarker(mark)
+		{
+			var i;
+			for(i=0; i<stops.length; i++)
+			{
+				if(stops[i] == mark)
+					break;
+			}
+			
+			if(i==stops.length)
+				alert("Marker not found for delete");
+			else if(i ==0)
+				alert("Cannot delete Home");
+			else
+			{
+				dirShow.setMap(null);
+				stops[i].setMap(null);
+				stops.splice(i,1);
+				infos.splice(i,1);
+			}
+		}
+		
+		function clearStops() {
+			for (var i=stops.length;i>0;i--)
+			{
+				stops[i-1].setMap(null);
+				stops.pop();
+				infos.pop();
+			}
+			dirShow.setMap(null);
+			createHome();
+		}
+		
+		function placeMarker() {
+			address = document.getElementById("addressBox").value.trim();
+			document.getElementById("addressBox").value = "";
+			
+			geocoder.geocode({ 'address': address, 'bounds': searchBounds, 'region': 'CA'}, function(results, status) {
+ 				if(status == google.maps.GeocoderStatus.OK) 
+  				{
+ 					var repeat = false;
+ 					var latLng = results[0].geometry.location;
+ 					var addrTitle = results[0].address_components[0].short_name + " "+ results[0].address_components[1].short_name;
+ 					
+ 					for(var i=0; i<stops.length; i++)
+ 					{
+ 						if(stops[i].getTitle() == addrTitle)
+ 						{
+ 							repeat = true;
+ 							break;
+ 						}
+ 					}
+  					
+ 					if(repeat)
+ 					{
+ 						alert("You have already searched "+ addrTitle);
+ 					}
+ 					else
+ 					{
+	  					map.panTo(latLng);
+	  					map.setZoom(14);
+	  					var marker = new google.maps.Marker({
+	  						position: latLng,
+	  						map: map,
+	  						title: addrTitle
+	  					});
+	  					
+	  					stops.push(marker);
+	  					infoMarker(marker);
+	  					google.maps.event.addListener(marker,'click', function() {
+	  						infoMarker(marker);
+	  					});
+	  					google.maps.event.addListener(marker, 'rightclick', function() {
+	  						removeMarker(marker);
+	  					});
+ 					}
+  				}
+ 				else if(status == google.maps.GeocoderStatus.ZERO_RESULTS)
+ 				{
+ 					alert("Address Not Found");
+ 					
+ 				}
+ 				else
+ 				{
+ 					alert("Geocoder failed: " + status);
+ 				}
+  			});			
+		}
+		
+		function mDistance(orig, dest) {
+			var lat1 = orig.getPosition().lat();
+			var lng1 = orig.getPosition().lng();
+			var lat2 = dest.getPosition().lat();
+			var lng2 = dest.getPosition().lng();
+			var diffLat = lat2-lat1;
+			var diffLng = lng2-lng1;
+
+			var a = Math.pow(Math.sin(diffLat/2),2) + (Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(diffLng/2),2));
+			var c = 2 * Math.atan2( Math.sqrt(a), Math.sqrt(1-a) );
+
+			return c*EARTH_CONST;
+		}
+		
+		function makeWayPoints(plan)
+		{
+			var wayPoints = [];
+			var length = plan.length;
+			
+			if(length>2)
+			{
+				for(var i=1;i<length-1;i++)
+			   	{
+			   		wayPoints.push({
+			   			location: plan[i].getPosition(),
+			   			stopover: true
+			   		})
+			   	}
+			}
+			else
+				wayPoints = null;
+			
+			return wayPoints;
+		}
+		
+		function TSPRoute()
+		{
+			var tempPlan = stops.slice(0);
+			var length = tempPlan.length;
+			var wayPts = makeWayPoints(tempPlan);
+			
+			if(wayPts == null)
+			{
+				return { origin: tempPlan[0].getPosition(),
+					destination: tempPlan[length-1].getPosition(),
+					travelMode: google.maps.TravelMode.DRIVING,
+					region: 'CA'
+				};
+			}
+			else
+			{
+				return { origin: tempPlan[0].getPosition(),
+					destination: tempPlan[length-1].getPosition(),
+					waypoints: wayPts,
+					optimizeWaypoints: true,
+					travelMode: google.maps.TravelMode.DRIVING,
+					region: 'CA'
+				};
+			}
+		}
+		
+		function customRoute()
+		{
+			var tempPlan = stops.slice(0);
+			var length = tempPlan.length;
+			var distance, savedj, temp;
+			var wayPts;
+			
+			//find order from origin, then from next
+		   	for(var i=0; i<length-2; i++) //-2 because dont want j to be length+1, and becuase dont need to compare indexes[length,length-1]
+		   	{
+		   		distance = 3100; //over half world diameter
+		   		savedj = -1;
+
+		   		for(var j=i+1; j<length; j++)
+		   		{
+		   			temp = mDistance(tempPlan[i], tempPlan[j]);
+		   			if(temp< distance)
+		   			{
+		   				distance = temp;
+		   				savedj = j;
+		   			}
+		   		}
+		   		
+		   		if(savedj ==-1)
+		   			alert("Error: All Distances Over Half World Diameter\nSaved J: "+savedj);
+		   		else if(savedj >=length)
+		   			alert("Error: Index out of bounds\nSaved J: "+savedj);
+		   		else
+		   		{
+		   			if(savedj >i+1)
+		   				tempPlan.swap(i+1,savedj);
+		   		}
+		   	}
+			
+			wayPts = makeWayPoints(tempPlan);
+			
+			if(wayPts == null)
+			{
+				return { origin: tempPlan[0].getPosition(),
+					destination: tempPlan[length-1].getPosition(),
+					travelMode: google.maps.TravelMode.DRIVING,
+					region: 'CA'
+				};
+			}
+			else
+			{
+				return { origin: tempPlan[0].getPosition(),
+					destination: tempPlan[length-1].getPosition(),
+					waypoints: wayPts,
+					travelMode: google.maps.TravelMode.DRIVING,
+					region: 'CA'
+				};
+			}
+		}
+		
+		function calculateRoute() {
+			var length = stops.length;
+			
+			if(length>1)
+			{	
+				dirShow.setMap(null);
+				dirShow.setMap(map);
+				var TSP = false;
+				var request;
+
+			   	if(TSP)
+			   		request = TSPRoute();
+			   	else
+			   		request = customRoute();
+
+
+			   	dirService.route(request, function(results, status) {
+					if(status == google.maps.DirectionsStatus.OK)
+					{
+						dirShow.setDirections(results);
+					}
+					else if(status == google.maps.DirectionsStatus.ZERO_RESULTS)
+						alert("No Route Found");
+					else
+						alert("Direction Service failed: " + status);
+				});	
+				
+			}
+			else
+			{
+				alert("Not Enough Stops to Calculate");
+			}
+		}
+    </script>
+  </head>
+  <body>
+	<input type="text" id="addressBox" name="addressBox" onkeypress="searchKeyPress(event);"/>
+	<input type="button" id="search" name="search" value="Search" onclick="placeMarker();"/>
+	<input type="button" id="calculate" name="calculate" value="Calculate" onclick="calculateRoute();"/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<input type="button" value="Home" onclick="backToHome();"/>
+	<input type="button" value="Reset" onclick="clearStops();"/>
+    <div id="map-canvas"></div>
+  </body>
+</html>
